@@ -159,17 +159,40 @@ jobs:
         if: matrix.os == 'ubuntu-22.04'
         uses: ./.github/actions/install-linux-deps
 
-      # Also installs the Tauri CLI and, when the APPLE_* secrets are present,
-      # code-signs and notarizes the macOS bundle.
+      # tauri-action treats an APPLE_CERTIFICATE that is *defined but empty* as
+      # "signing enabled", then fails importing an empty certificate. So export
+      # these only when the secrets really exist; otherwise the macOS bundle is
+      # ad-hoc signed, which is correct without a Developer account.
+      - name: Configure Apple signing
+        if: matrix.os == 'macos-15'
+        shell: bash
+        env:
+          CERT: ${{ secrets.APPLE_CERTIFICATE }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID_V: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD_V: ${{ secrets.APPLE_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$CERT" ]; then
+            {
+              echo "APPLE_CERTIFICATE<<GITHUB_ENV_EOF"
+              echo "$CERT"
+              echo "GITHUB_ENV_EOF"
+              echo "APPLE_CERTIFICATE_PASSWORD=$CERT_PASSWORD"
+              echo "APPLE_SIGNING_IDENTITY=$IDENTITY"
+              echo "APPLE_ID=$APPLE_ID_V"
+              echo "APPLE_PASSWORD=$APPLE_PASSWORD_V"
+              echo "APPLE_TEAM_ID=$TEAM_ID"
+            } >> "$GITHUB_ENV"
+            echo "Apple signing configured — bundle will be signed and notarized."
+          else
+            echo "No APPLE_CERTIFICATE secret — building an ad-hoc signed macOS bundle."
+          fi
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: .
           tauriScript: pnpm tauri
