@@ -92,13 +92,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # actions/checkout refuses a path outside GITHUB_WORKSPACE, and vite,
+      # tsconfig and the deep re-exports all hard-code the sibling at
+      # ../pixiWeb — so clone it there directly. Public repo, no token.
       - name: Check out pixiWeb into ../pixiWeb
-        uses: actions/checkout@v5
-        with:
-          repository: ${{ env.PIXIWEB_REPOSITORY }}
-          path: ../pixiWeb
-          token: ${{ github.token }}
-          persist-credentials: false
+        run: git clone --depth 1 "https://github.com/${{ env.PIXIWEB_REPOSITORY }}.git" ../pixiWeb
 
       - uses: pnpm/action-setup@v4
         with:
