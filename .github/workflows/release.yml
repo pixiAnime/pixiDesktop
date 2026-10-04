@@ -138,9 +138,9 @@ jobs:
             ];
             for (const [file, re, to] of edits) {
               const before = fs.readFileSync(file, "utf8");
-              const after = before.replace(re, to);
-              if (before === after) throw new Error(`no version match in ${file}`);
-              fs.writeFileSync(file, after);
+              // A no-op stamp is fine — only a genuinely missing field is fatal.
+              if (!re.test(before)) throw new Error(`no version field in ${file}`);
+              fs.writeFileSync(file, before.replace(re, to));
             }
             console.log(`stamped ${v}`);
           '
