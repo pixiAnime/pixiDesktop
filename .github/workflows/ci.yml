@@ -26,6 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: ./.github/actions/install-linux-deps
+
       # actions/checkout refuses a path outside GITHUB_WORKSPACE, and vite,
       # tsconfig and the deep re-exports all hard-code the sibling at
       # ../pixiWeb — so clone it there directly. Public repo, no token.
@@ -79,25 +81,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-13, windows-latest]
+        os: [ubuntu-22.04, macos-15, windows-latest]
     steps:
       - uses: actions/checkout@v5
 
       - name: Install Linux system dependencies
         if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libssl-dev \
-            libxdo-dev
+        uses: ./.github/actions/install-linux-deps
 
       - uses: dtolnay/rust-toolchain@stable
 

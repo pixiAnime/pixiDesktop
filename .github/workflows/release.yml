@@ -83,12 +83,19 @@ jobs:
         include:
           - label: Linux x86_64
             os: ubuntu-22.04
+            rust-target: ''
           - label: Windows x86_64
             os: windows-latest
+            rust-target: ''
           - label: macOS Apple Silicon
-            os: macos-latest
+            os: macos-15
+            rust-target: ''
+          # GitHub retired its Intel macOS runners, so build the x86_64 slice
+          # by cross-compiling from an arm64 runner — same SDK, same linker.
           - label: macOS Intel
-            os: macos-13
+            os: macos-15
+            rust-target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v5
 
@@ -140,25 +147,17 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Add cross-compilation target
+        if: matrix.rust-target != ''
+        run: rustup target add ${{ matrix.rust-target }}
+
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
 
       - name: Install Linux system dependencies
         if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libssl-dev \
-            libxdo-dev
+        uses: ./.github/actions/install-linux-deps
 
       # Also installs the Tauri CLI and, when the APPLE_* secrets are present,
       # code-signs and notarizes the macOS bundle.
@@ -174,6 +173,7 @@ jobs:
         with:
           projectPath: .
           tauriScript: cargo tauri
+          args: ${{ matrix.args }}
           releaseId: ${{ needs.prepare.outputs.release_id }}
           releaseDraft: true
 

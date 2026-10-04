@@ -129,9 +129,10 @@ A draft GitHub release is created with the installers attached:
 | --- | --- |
 | Linux | `.deb`, `.rpm`, `.AppImage` |
 | Windows | `.msi`, `.exe` (NSIS setup) |
-| macOS | `.dmg` + `.app` for both Apple Silicon and Intel |
+| macOS | `.dmg` + `.app` — Apple Silicon and Intel (x86_64) |
 
-Bundle targets are Tauri 2's defaults — `bundle.targets` is unset in `tauri.conf.json`.
+Bundle targets are Tauri 2's defaults — `bundle.targets` is unset in `tauri.conf.json`. GitHub
+retired its Intel macOS runners, so the x86_64 slice is cross-compiled from an Apple Silicon runner.
 
 Apple code-signing and notarization activate automatically if the standard `APPLE_*` secrets are
 configured in repository settings; unsigned builds are produced otherwise. Windows and macOS
