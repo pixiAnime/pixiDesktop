@@ -1,0 +1,24 @@
+name: probe-macos
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-13, macos-14, macos-15, macos-latest, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - name: Report runner
+        shell: bash
+        run: |
+          echo "label=${{ matrix.os }}"
+          echo "RUNNER_OS=$RUNNER_OS"
+          echo "ARCH=$(uname -m)"
+          sw_vers 2>/dev/null || uname -a
