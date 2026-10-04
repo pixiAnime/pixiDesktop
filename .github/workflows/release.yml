@@ -208,6 +208,7 @@ jobs:
       - name: Flip draft to published
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
           TAG: v${{ needs.prepare.outputs.version }}
           INPUT_DRAFT: ${{ inputs.draft }}
         run: |
@@ -215,15 +216,16 @@ jobs:
           if [ "$INPUT_DRAFT" = "true" ]; then
             echo "Release left as a draft for review: $TAG"
           else
-            gh release edit "$TAG" --draft=false
+            gh release edit "$TAG" --repo "$REPO" --draft=false
             echo "Published $TAG"
           fi
 
       - name: Summary
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
           TAG: v${{ needs.prepare.outputs.version }}
         run: |
-          gh release view "$TAG" \
+          gh release view "$TAG" --repo "$REPO" \
             --json name,isDraft,url,assets \
             --jq '{name: .name, draft: .isDraft, url: .url, assets: [.assets[].name]}'
