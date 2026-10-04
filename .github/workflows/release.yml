@@ -97,7 +97,7 @@ jobs:
         with:
           repository: ${{ env.PIXIWEB_REPOSITORY }}
           path: ../pixiWeb
-          token: ${{ secrets.PIXIWEB_TOKEN || github.token }}
+          token: ${{ github.token }}
           persist-credentials: false
 
       - uses: pnpm/action-setup@v4

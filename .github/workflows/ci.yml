@@ -31,9 +31,8 @@ jobs:
         with:
           repository: ${{ env.PIXIWEB_REPOSITORY }}
           path: ../pixiWeb
-          # GITHUB_TOKEN cannot read other private repos; falls back to it
-          # automatically if pixiWeb is ever made public.
-          token: ${{ secrets.PIXIWEB_TOKEN || github.token }}
+          # pixiWeb is public, so the default token is enough.
+          token: ${{ github.token }}
           persist-credentials: false
 
       - uses: pnpm/action-setup@v4

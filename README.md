@@ -137,13 +137,11 @@ Apple code-signing and notarization activate automatically if the standard `APPL
 configured in repository settings; unsigned builds are produced otherwise. Windows and macOS
 bundling needs no extra setup.
 
-### One-time repository setup
+### No setup needed
 
-Because `pixiWeb` is private, `GITHUB_TOKEN` cannot read it from another repository. Add a secret
-named **`PIXIWEB_TOKEN`** — a fine-grained PAT with `Contents: Read` on `pixiAnime/pixiWeb` only —
-under *Settings → Secrets and variables → Actions*. Both workflows check `pixiWeb` out into
-`../pixiWeb`, and nothing builds without it. If `pixiWeb` is ever made public, remove the secret and
-the workflows fall back to `github.token` automatically.
+Both workflows check [`pixiAnime/pixiWeb`](https://github.com/pixiAnime/pixiWeb) out into
+`../pixiWeb` themselves, so there is nothing to configure — no tokens, no secrets. Apple signing
+and notarization are the only optional secrets, and their absence is handled gracefully.
 
 ## Repository layout
 

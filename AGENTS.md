@@ -106,9 +106,9 @@ CI (`.github/workflows/`) enforces what already passes: `pnpm check`, `pnpm buil
 `cargo clippy --all-targets -- -D warnings` + `cargo test` on every PR, plus a `cargo check` matrix
 over Linux/macOS/Windows to catch platform-conditional compile breaks without a full bundle.
 
-**`../pixiWeb` is checked out into `../pixiWeb` by every workflow**, because Vite and tsconfig
-resolve it there and `react`/`@types/react` come from its `node_modules`. `GITHUB_TOKEN` cannot read
-another private repo, so the `PIXIWEB_TOKEN` secret must exist or every job fails at checkout.
+Every workflow checks `pixiAnime/pixiWeb` out into `../pixiWeb` itself — Vite and tsconfig resolve
+the sibling there, and `react`/`@types/react` come from its `node_modules`. It is public, so the
+default `github.token` is sufficient and no secrets are involved.
 
 ## Code Conventions & Common Patterns
 
