@@ -96,7 +96,7 @@ git tag v0.2.0 && git push origin v0.2.0                   # → CI release, all
 Scoped Rust test: `cargo test services::hls` (no `--lib` — this crate is binary-only).
 
 Never run `cargo build --release`: it produces a **dev** binary that loads `http://localhost:1420`
-instead of the embedded frontend. Always go through `cargo tauri build`.
+instead of the embedded frontend. Always go through `pnpm tauri:build`.
 
 **There is no `lint` or `format` npm script, and no eslint/prettier/biome/rustfmt config.** The Rust
 is hand-formatted, not rustfmt output (21 diffs at any `max_width`), so `cargo fmt --check` is
@@ -183,11 +183,12 @@ Gate dev-only code with `import.meta.env.DEV` (`src/main.ts:122`).
 
 ## Runtime & Tooling Preferences
 
-- **Package manager: pnpm** (`pnpm-lock.yaml`, lockfile v9). No npm/yarn/bun. No `packageManager`
-  or `engines` field, but Vite 8 requires Node `^20.19.0 || >=22.12.0`.
+- **Package manager: pnpm** (`pnpm-lock.yaml`, lockfile v9). No npm/yarn/bun. `packageManager` and
+  `engines` are pinned in `package.json`; Vite 8 requires Node `^20.19.0 || >=22.12.0`.
 - **Rust:** edition 2021, tauri 2.11, rustls (no OpenSSL/SChannel glue). No `rust-toolchain.toml`.
-- **`cargo tauri` must be installed separately** — `@tauri-apps/cli` is *not* an npm dependency, so
-  `pnpm tauri:dev` / `tauri:build` shell out to a machine-level `cargo tauri`.
+- **Tauri CLI is a devDependency** (`@tauri-apps/cli`), invoked via the `tauri` / `tauri:dev` /
+  `tauri:build` scripts. Do not shell out to a globally installed `cargo tauri` — the release
+  workflow runs `pnpm tauri`, so the CLI must come from the lockfile.
 - **Linux webview deps:** `webkit2gtk-4.1`, `gtk+-3.0`.
 - **Port coupling:** `tauri.conf.json` `devUrl:1420` must match `vite.config.ts` `server.port`.
 - **Env vars:** no `.env` here. `VITE_*` values are inherited from pixiWeb's config module;

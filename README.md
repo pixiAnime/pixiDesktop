@@ -82,7 +82,6 @@ pnpm tauri:dev
 | Node | `^20.19` or `>=22.12` (Vite 8) |
 | Package manager | **pnpm** — `corepack enable pnpm` |
 | Rust | stable toolchain, edition 2021 |
-| Tauri CLI | `cargo install tauri-cli --version "^2"` |
 | Linux | `webkit2gtk-4.1`, `gtk+-3.0`, `libssl`, `libxdo` |
 
 ## Development
