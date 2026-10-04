@@ -24,10 +24,10 @@ jobs:
     name: Typecheck & tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check out pixiWeb into ../pixiWeb
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ env.PIXIWEB_REPOSITORY }}
           path: ../pixiWeb
@@ -40,7 +40,7 @@ jobs:
         with:
           run_install: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -85,7 +85,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04, macos-13, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Linux system dependencies
         if: matrix.os == 'ubuntu-22.04'

@@ -33,7 +33,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       release_id: ${{ steps.meta.outputs.release_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -90,10 +90,10 @@ jobs:
           - label: macOS Intel
             os: macos-13
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check out pixiWeb into ../pixiWeb
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ env.PIXIWEB_REPOSITORY }}
           path: ../pixiWeb
@@ -104,7 +104,7 @@ jobs:
         with:
           run_install: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
