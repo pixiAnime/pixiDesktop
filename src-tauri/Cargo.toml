@@ -1,0 +1,35 @@
+[package]
+name = "pixianime-desktop"
+version = "0.1.0"
+description = "PixiAnime — desktop anime streaming client"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2.11", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["fs", "io-util", "net", "time"] }
+# rustls keeps TLS self-contained on all three platforms (no OpenSSL/SChannel glue).
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls",
+  "stream",
+  "charset",
+  "http2",
+  "macos-system-configuration",
+] }
+# Already in the tree via reqwest — needed directly for URL joining and
+# application/x-www-form-urlencoded encoding of rewritten playlist URIs.
+url = "2"
+# Same: percent-decoding URL path segments into download file names.
+percent-encoding = "2"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = "s"
+panic = "abort"
+strip = true

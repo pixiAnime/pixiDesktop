@@ -1,0 +1,18 @@
+{
+  "extends": "../pixiWeb/tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "paths": {
+      // react types live in pixiWeb (it owns the dependency); pointing there
+      // keeps one @types/react identity across both trees.
+      "react": ["../pixiWeb/node_modules/@types/react"],
+      "react/*": ["../pixiWeb/node_modules/@types/react/*"],
+      "@/config": ["./src/shadow/config.ts"],
+      "@/components/pixiclient": ["./src/shadow/components-pixiclient/index.tsx"],
+      "@/api/pixiclient": ["./src/bridge/index.ts"],
+      "@/api/pixiclient/*": ["./src/bridge/*"],
+      "@/*": ["../pixiWeb/src/*"]
+    }
+  },
+  "include": ["src", "../pixiWeb/src"]
+}

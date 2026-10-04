@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The React app this shell wraps. Vite/tsconfig resolve it as `../pixiWeb`,
+  # and react + @types/react are loaded from its node_modules — it is a hard
+  # build dependency, not a convenience.
+  PIXIWEB_REPOSITORY: pixiAnime/pixiWeb
+
+jobs:
+  verify:
+    name: Typecheck & tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out pixiWeb into ../pixiWeb
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PIXIWEB_REPOSITORY }}
+          path: ../pixiWeb
+          # GITHUB_TOKEN cannot read other private repos; falls back to it
+          # automatically if pixiWeb is ever made public.
+          token: ${{ secrets.PIXIWEB_TOKEN || github.token }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install pixiWeb dependencies
+        working-directory: ../pixiWeb
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck both source trees
+        run: pnpm check
+
+      - name: Bundle frontend
+        run: pnpm build
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test
+
+  rust-check:
+    name: cargo check (${{ matrix.os }})
+    # Catches platform-conditional compile breaks (e.g. the cfg!(windows)
+    # protocol-base branch) in seconds, without paying for a full bundle.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-13, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libxdo-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: cargo check
+        working-directory: src-tauri
+        run: cargo check --all-targets

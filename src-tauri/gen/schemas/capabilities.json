@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Grants the main window the core defaults (events, window basics). Commands from generate_handler! are app-owned and allowed without a permission entry.","local":true,"windows":["main"],"permissions":["core:default"]}}

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Grants the main window the core defaults (events, window basics). Commands from generate_handler! are app-owned and allowed without a permission entry.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

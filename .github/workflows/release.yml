@@ -1,0 +1,208 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without the leading v (e.g. 0.1.0)'
+        required: true
+        type: string
+      draft:
+        description: 'Create the release as a draft'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PIXIWEB_REPOSITORY: pixiAnime/pixiWeb
+
+jobs:
+  prepare:
+    name: Prepare draft release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      release_id: ${{ steps.meta.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version and create the draft release
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_DRAFT: ${{ inputs.draft }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            VERSION="${INPUT_VERSION#v}"
+            if ! git rev-parse --verify "refs/tags/v$VERSION" >/dev/null 2>&1; then
+              git tag "v$VERSION" "$GITHUB_SHA"
+              git push origin "v$VERSION"
+            fi
+          else
+            VERSION="${REF_NAME#v}"
+          fi
+
+          FLAG="--draft"
+          if [ "$INPUT_DRAFT" = "false" ]; then FLAG=""; fi
+
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            RELEASE_ID="$(gh release view "v$VERSION" --json databaseId --jq .databaseId)"
+          else
+            gh release create "v$VERSION" $FLAG \
+              --title "PixiAnime v$VERSION" \
+              --generate-notes
+            RELEASE_ID="$(gh release view "v$VERSION" --json databaseId --jq .databaseId)"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.label }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Linux x86_64
+            os: ubuntu-22.04
+          - label: Windows x86_64
+            os: windows-latest
+          - label: macOS Apple Silicon
+            os: macos-latest
+          - label: macOS Intel
+            os: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out pixiWeb into ../pixiWeb
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PIXIWEB_REPOSITORY }}
+          path: ../pixiWeb
+          token: ${{ secrets.PIXIWEB_TOKEN || github.token }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install pixiWeb dependencies
+        working-directory: ../pixiWeb
+        run: pnpm install --frozen-lockfile
+
+      # The version is duplicated across three manifests by hand; stamp them all
+      # from the tag so a release can never ship a binary that disagrees with it.
+      - name: Stamp version
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const v = process.env.VERSION;
+            const edits = [
+              ["package.json", /("version":\s*)"[^"]+"/, `$1"${v}"`],
+              ["src-tauri/tauri.conf.json", /("version":\s*)"[^"]+"/, `$1"${v}"`],
+              ["src-tauri/Cargo.toml", /^version = "[^"]+"/m, `version = "${v}"`],
+            ];
+            for (const [file, re, to] of edits) {
+              const before = fs.readFileSync(file, "utf8");
+              const after = before.replace(re, to);
+              if (before === after) throw new Error(`no version match in ${file}`);
+              fs.writeFileSync(file, after);
+            }
+            console.log(`stamped ${v}`);
+          '
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libxdo-dev
+
+      # Also installs the Tauri CLI and, when the APPLE_* secrets are present,
+      # code-signs and notarizes the macOS bundle.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: .
+          tauriScript: cargo tauri
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          releaseDraft: true
+
+  finalize:
+    name: Publish release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Flip draft to published
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.prepare.outputs.version }}
+          INPUT_DRAFT: ${{ inputs.draft }}
+        run: |
+          set -euo pipefail
+          if [ "$INPUT_DRAFT" = "true" ]; then
+            echo "Release left as a draft for review: $TAG"
+          else
+            gh release edit "$TAG" --draft=false
+            echo "Published $TAG"
+          fi
+
+      - name: Summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.prepare.outputs.version }}
+        run: |
+          gh release view "$TAG" \
+            --json name,isDraft,url,assets \
+            --jq '{name: .name, draft: .isDraft, url: .url, assets: [.assets[].name]}'
