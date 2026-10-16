@@ -1,15 +1,62 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Never send a Referer upstream: the scheme handler forwards the browser's
+      own headers (protocol.rs `forwarded`), and an app-local origin means
+      nothing to a provider — some 403 on a foreign Referer. Extensions that
+      need one set it explicitly in their request headers.
+    -->
+    <meta name="referrer" content="no-referrer" />
     <meta
       name="description"
       content="PixiAnime — a modern anime streaming desktop client."
     />
-    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="theme-color" content="#17151c" />
+    <!--
+      Poster art is the first thing that needs the network after paint; both
+      metadata APIs are reached by plain fetch, images come from two CDNs.
+    -->
+    <link rel="preconnect" href="https://cdn.myanimelist.net" />
+    <link rel="preconnect" href="https://s4.anilist.co" />
+    <link rel="dns-prefetch" href="https://api.jikan.moe" />
+    <link rel="dns-prefetch" href="https://graphql.anilist.co" />
     <title>PixiAnime</title>
+    <!--
+      Apply the stored theme and brand hue before first paint — a light-mode or
+      non-default-accent user never sees a flash. Mirrors pixiWeb's index.html
+      and src/lib/theme.ts (same keys, same system fallback).
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('pixiweb.theme')
+          var mode =
+            stored === 'dark' || stored === 'light'
+              ? stored
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+          var root = document.documentElement
+          root.classList.toggle('dark', mode === 'dark')
+          root.style.colorScheme = mode
+          var meta = document.querySelector('meta[name="theme-color"]')
+          if (meta) meta.setAttribute('content', mode === 'dark' ? '#17151c' : '#fcfbfd')
+
+          // Brand hue (Settings → Theme colour) — same key as src/lib/theme.ts.
+          // The ramps live in pixiWeb's index.css; an unknown id matches none.
+          var accent = localStorage.getItem('pixiweb.accent')
+          if (accent && /^[a-z]+$/.test(accent)) {
+            root.dataset.accent = accent
+          }
+        } catch (e) {
+          /* storage blocked — fall back to the light default */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

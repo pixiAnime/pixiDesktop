@@ -57,7 +57,7 @@ pub async fn http_request(
 }
 
 /// Fetch and rewrite an HLS playlist (pixiClient's `/m3u8`). A successful
-/// fetch also marks the URL as the stream the Save button will persist.
+/// fetch also marks the URL as the stream the save service will persist.
 #[tauri::command]
 pub async fn fetch_playlist(
     app: tauri::AppHandle,

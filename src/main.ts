@@ -68,10 +68,8 @@ try {
 await import('@/main')
 
 /**
- * Poll until the React tree renders. The mount report needs it, and so does
- * the dev transport probe below: its `stream-served` event has to land after
- * the Save button registered its listener, or the latch is invisible in the
- * log even though everything works.
+ * Poll until the React tree renders — the mount report needs it, and it keeps
+ * the dev transport probe's log lines ordered after the render they describe.
  */
 async function waitForMount(): Promise<number> {
   for (let attempt = 0; attempt < 200; attempt++) {
@@ -114,9 +112,8 @@ document.addEventListener('click', (event) => {
  * Dev-only transport check: `Range` through the scheme from the real webview.
  * Range is not a CORS-safelisted header, so this forces a preflight — the
  * OPTIONS route is covered by the same request. It deliberately targets a
- * real (tiny, Range-capable) media file: that is what makes Rust announce
- * `stream-served`, proving the Save button's arm-and-latch chain end to end
- * and leaving it a sensible target if Save is pressed before playing.
+ * real (tiny, Range-capable) media file, so it also exercises the media path
+ * the player uses: content-type sniffing and `download::remember`.
  * Never runs in a production build.
  */
 if (import.meta.env.DEV && base) {
@@ -135,5 +132,21 @@ if (import.meta.env.DEV && base) {
     } catch (error) {
       await report(`range FAILED: ${String(error)}`)
     }
+    // The route the playback adapter hands the player for a header-less HLS
+    // source: the playlist must come back rewritten to the scheme's segment
+    // route. If it did not, hls.js would XHR provider segments directly, which
+    // no CDN's CORS policy allows — that is the failure that reads as "no video".
+    try {
+      const playlist = await fetch(
+        `${base}/m3u8?url=${encodeURIComponent('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8')}`,
+      )
+      const text = await playlist.text()
+      await report(
+        `m3u8: ${playlist.status} rewritten=${text.includes('/m3u8/segment?url=')} bytes=${text.length}`,
+      )
+    } catch (error) {
+      await report(`m3u8 FAILED: ${String(error)}`)
+    }
   })()
 }
+

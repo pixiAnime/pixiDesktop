@@ -11,6 +11,8 @@
       "@/components/pixiclient": ["./src/shadow/components-pixiclient/index.tsx"],
       "@/api/pixiclient": ["./src/bridge/index.ts"],
       "@/api/pixiclient/*": ["./src/bridge/*"],
+      "@/extensions": ["./src/shadow/extensions/index.ts"],
+      "@/extensions/*": ["../pixiWeb/src/extensions/*"],
       "@/*": ["../pixiWeb/src/*"]
     }
   },

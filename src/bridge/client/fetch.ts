@@ -52,16 +52,31 @@ interface BridgeErrorPayload {
 }
 
 /**
+ * The webview *is* the browser here, so the real User-Agent rides along on
+ * every upstream call. Without it Rust falls back to a fabricated
+ * desktop-Chrome identity, and hosts that fingerprint bots refuse that
+ * outright — Codeberg answered an extension download with
+ * `403 Access denied, old Chrome version`. pixiClient sent `navigator.userAgent`
+ * for exactly the same reason; a caller that named its own UA keeps it.
+ */
+function withUserAgent(headers: Record<string, string> | null): Record<string, string> | null {
+  if (typeof navigator !== 'object' || !navigator.userAgent) return headers
+  const named = headers ?? {}
+  if (Object.keys(named).some((name) => name.toLowerCase() === 'user-agent')) return headers
+  return { 'User-Agent': navigator.userAgent, ...named }
+}
+
+/**
  * Headers pixiWeb set for the upstream call. `Content-Type` is lifted out so
  * Rust can send it even when the structured payload replaces the header map.
  */
 function toHeaderMap(init: BridgeFetchInit): Record<string, string> | null {
-  if (!init.headers) return null
+  const headers = new Headers(init.headers)
   const out: Record<string, string> = {}
-  new Headers(init.headers).forEach((value, name) => {
+  headers.forEach((value, name) => {
     out[name] = value
   })
-  return Object.keys(out).length > 0 ? out : null
+  return withUserAgent(Object.keys(out).length > 0 ? out : null)
 }
 
 function asResult(value: unknown): PlainHttpResult {
@@ -151,7 +166,7 @@ export async function bridgeFetch(path: string, init: BridgeFetchInit = {}): Pro
       const result = await call<PlainHttpResult>('http_request', {
         url: payload.url,
         method: payload.method,
-        headers: payload.headers,
+        headers: withUserAgent(payload.headers),
         body: payload.body,
         contentType: payload.content_type,
         timeoutMs: null,

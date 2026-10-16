@@ -23,12 +23,14 @@ use url::Url;
 /// Media by URL shape, for CDNs that answer `application/octet-stream`.
 const MEDIA_EXTENSIONS: &[&str] = &[".mp4", ".webm", ".mkv", ".mov", ".m4v", ".mp3", ".m4a"];
 
-/// The stream the Save button persists: whatever was last handed to the player.
+/// The stream the save service persists: whatever was last handed to the player.
 static CURRENT: Mutex<Option<String>> = Mutex::new(None);
 
-/// Remember what is playing and tell the frontend a stream exists. Every media
-/// response re-announces: the listener is idempotent, so a request missed on
-/// either side heals on the next one instead of arming nothing for a session.
+/// Remember what is playing. Logs only when the URL actually changes; the
+/// `stream-served` event is re-announced on every media response and currently
+/// has no listener (the Save button it armed is gone) — kept as the hook a
+/// player-side affordance would latch onto. `ponytail:` drop the emit when that
+/// affordance is either wired or dropped for good.
 pub fn remember<R: Runtime>(app: &AppHandle<R>, url: &str) {
     if let Ok(mut slot) = CURRENT.lock() {
         if slot.as_deref() != Some(url) {
@@ -51,7 +53,8 @@ pub fn is_media_target(url: &str, content_type: &str, ranged: bool) -> bool {
 }
 
 /// Save the remembered stream into the user's Downloads folder; returns the
-/// file that was written (the frontend reveals it on demand).
+/// file that was written (a frontend affordance would reveal it on demand).
+/// No caller in the UI today — see the note in AGENTS.md.
 pub async fn save_current<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, BridgeError> {
     let target = CURRENT.lock().ok().and_then(|slot| slot.clone());
     let Some(target) = target else {

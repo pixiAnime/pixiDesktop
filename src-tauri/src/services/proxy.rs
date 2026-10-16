@@ -9,8 +9,15 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::time::Duration;
 
-/// pixiClient forwarded the browser's UA; a bare request gets a stable one —
-/// several CDNs reject clients without a User-Agent.
+/// Fallback identity for fetches that arrive with no User-Agent. Every
+/// frontend call now carries the webview's own (see `src/bridge/client/fetch.ts`),
+/// so this serves Rust-originated fetches only: scheme-handler media and
+/// headerless playlists. It is a browser string rather than nothing because
+/// several CDNs reject clients with no UA at all.
+///
+/// ponytail: bot-gating hosts refuse this fabricated Windows-Chrome identity
+/// (Codeberg: `403 Access denied, old Chrome version`). Forward the webview's
+/// own header out of the scheme handler and this constant can go.
 const DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 const MAX_REDIRECTS: u8 = 10;

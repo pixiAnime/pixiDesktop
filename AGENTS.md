@@ -22,29 +22,50 @@ pixiWeb React app ── module shadows ── typed Tauri commands ── Rust 
 <video> / hls.js ── pixi:// scheme handler ───────────┘
 ```
 
-### The three module shadows
+### The four module shadows
 
-pixiWeb keeps importing its own paths. This repo redirects exactly three of them:
+pixiWeb keeps importing its own paths. This repo redirects exactly four of them:
 
 | pixiWeb import | Desktop replacement | File |
 | --- | --- | --- |
 | `@/config` | protocol base + `isDesktop` | `src/shadow/config.ts` |
 | `@/api/pixiclient` | commands instead of a localhost socket | `src/bridge/` |
-| `@/components/pixiclient` | Save button, no offline dialog | `src/shadow/components-pixiclient/index.tsx` |
+| `@/components/pixiclient` | all three render nothing — the bridge is in-process | `src/shadow/components-pixiclient/index.tsx` |
+| `@/extensions` | HLS playback through the scheme; progressive media straight from the CDN | `src/shadow/extensions/` |
 
-These are declared **twice** — as Vite aliases (`vite.config.ts:59-62`) *and* as tsconfig `paths`
-(`tsconfig.app.json:10-14`). **Changing a shadow means editing both.** The typecheck covers both
+These are declared **twice** — as Vite aliases (`vite.config.ts:59-66`) *and* as tsconfig `paths`
+(`tsconfig.app.json:10-16`). **Changing a shadow means editing both.** The typecheck covers both
 trees (`include: ["src", "../pixiWeb/src"]`), so export-surface drift fails `pnpm check`. That is
 the seam's whole safety mechanism — respect it.
+
+`@/extensions` shadows the *barrel* only: the players import `preparePlayback` from it, while the
+subpaths (`@/extensions/subtitles/…`, `…/providers/…`) stay pixiWeb's. Its subpath alias is a regex
+on purpose — Vite strips a trailing slash from a string alias pair, which would make both entries
+match the bare barrel.
+
+Two things pixiWeb owns are also rewritten at build time, because its source is never edited:
+`src/index.css` gets `@source` directives (Tailwind source pinning) and `src/main.tsx` has its
+service-worker registration disabled — a local app shell needs no cache, and a worker outlives an
+update. Both live in `vite.config.ts`.
 
 ### Communication channels
 
 | Channel | Direction | Payload | Used for |
 | --- | --- | --- | --- |
 | `invoke(...)` | JS → Rust | JSON args/returns | non-streaming API calls (`http_request`, `fetch_playlist`, `download_stream`, `reveal_item`, `protocol_base`, `open_url`, `report`) |
-| `app.emit(...)` | Rust → JS | unit | `stream-served` arms the Save button |
+| `app.emit(...)` | Rust → JS | unit | `stream-served` — emitted per media response, **no listener today** (see below) |
 | `pixi://localhost` scheme | JS → Rust (as HTTP) | streaming bytes | `/request`, `/m3u8`, `/m3u8/segment` — the **only** path for binary/bodies too large for IPC |
 | `println!` / `invoke('report')` | either → terminal | text log | the only observable output |
+
+`download_stream` and `reveal_item` are registered and tested but **have no caller**: the header slot
+that hosted the Save button is now empty (the web fills it with its `pixiClient Connected` badge,
+which is meaningless for an in-process bridge). Re-exposing them needs a new home — the player.
+
+`bridgeFetch` attaches the **webview's own `User-Agent`** to every query-form call
+(`src/bridge/client/fetch.ts`). Rust's fabricated desktop-Chrome fallback is refused outright by
+hosts that fingerprint bots — Codeberg answered an extension install with
+`403 Access denied, old Chrome version`. The webview *is* the browser here, so its UA is the honest
+one; do not "simplify" this back to a hard-coded string.
 
 ### Data flow — an API call
 
@@ -62,19 +83,39 @@ the seam's whole safety mechanism — respect it.
 
 ### Data flow — playback / save
 
-`GET /m3u8?url=…` → `hls::fetch_and_rewrite` rewrites every media reference to
-`<base>/m3u8/segment?url=<absolute>`, so the webview only ever speaks the app's own scheme. Each
-media response calls `download::remember` and re-emits `stream-served` (self-healing listener).
+The shadowed `@/extensions` adapter decides the transport per source (`src/shadow/extensions/playbackAdapter.ts`):
+
+| source | route |
+| --- | --- |
+| mp4/webm/unknown | the provider URL, **untouched** — the media element fetches it |
+| hls, no headers | `GET /m3u8?url=…` (playlist rewritten to `/m3u8/segment`) |
+| hls + headers | `POST /m3u8 {url, headers}` → rewritten text → Blob URL |
+
+Progressive media cannot go through the scheme: a `pixi://` URL in a media element fails with
+`MEDIA_ERR_SRC_NOT_SUPPORTED` no matter what `media-src` allows — WebKit's media loader handles only
+http(s)/blob/file, and CSP is a permission check, not a transport. Proxying would also buffer a whole
+episode in RAM (`read_bytes`) before the first byte reached the player. Handing the URL over is what
+the web build does; the CDN needs no headers and answers `Range` natively, so seeking is native too.
+
+HLS stays on the scheme because hls.js (XHR + MSE, *not* the media loader) *can* read `pixi://` — and
+that is where header injection, playlist rewriting and CORS actually matter. `GET /m3u8?url=…` →
+`hls::fetch_and_rewrite` rewrites every media reference to `<base>/m3u8/segment?url=<absolute>`, so
+the player only ever speaks the app's own scheme. Each scheme media response also calls
+`download::remember`, caching the URL for the save service and logging `[stream] ready to save: …` —
+for progressive media nothing calls it any more (the scheme is off that path).
+
 `download_stream` → `save_current` writes to `app.path().download_dir()` via a `.part` file, flushed
 and renamed only on success. `reveal_item` canonicalizes and refuses anything outside Downloads.
+Neither is reachable from the UI today — see *Communication channels*.
 
 ## Key Directories
 
 | Path | Purpose |
 | --- | --- |
-| `src/` | Desktop TypeScript shell — 8 files, entry + bridge + shadows |
+| `src/` | Desktop TypeScript shell — entry + bridge + shadows |
 | `src/bridge/` | Tauri implementation of pixiWeb's `@/api/pixiclient` surface |
-| `src/shadow/` | Module shadows: `config.ts` and `components-pixiclient/` |
+| `src/shadow/` | Module shadows: `config.ts`, `components-pixiclient/`, `extensions/` |
+| `index.html` | Desktop head: protocol base is fetched by `src/main.ts`, theme + accent applied before first paint |
 | `src-tauri/src/` | Rust: `main.rs`, `protocol.rs`, `error.rs`, `commands/`, `services/` |
 | `src-tauri/src/services/` | `proxy.rs`, `security.rs`, `hls.rs`, `download.rs` — where tests live |
 | `src-tauri/gen/schemas/` | **Generated** by `tauri_build` — do not hand-edit |
@@ -143,11 +184,11 @@ verbatim (`src/bridge/client/errors.ts`). **Adding a code means changing both si
 point. Rust: `async fn` returning `Result<_, BridgeError>`; the sync scheme handler spawns and hands
 off to the responder (`src-tauri/src/protocol.rs:44`).
 
-**State / DI:** none of either. State is `useState` + `useEffect`; shared state is module-level
-statics (`static CURRENT: Mutex<Option<String>>` in `download.rs:27`, `OnceLock<Client>` in
-`proxy.rs`). Dependencies are plain parameters (`app: &AppHandle<R>`, `incoming: &HeaderMap`).
-UI phase is a discriminated union plus a `Record<Phase, string>` label map
-(`src/shadow/components-pixiclient/index.tsx:18`).
+**State / DI:** none of either. Desktop-authored components hold no state at all
+(`src/shadow/components-pixiclient/index.tsx` is three functions returning `null`); UI state is
+pixiWeb's `useState` + `useEffect`, and shared state is module-level statics
+(`static CURRENT: Mutex<Option<String>>` in `download.rs:27`, `OnceLock<Client>` in `proxy.rs`).
+Dependencies are plain parameters (`app: &AppHandle<R>`, `incoming: &HeaderMap`).
 
 **Styling:** Tailwind v4 utilities only, composed through pixiWeb's `cn()` helper
 (`@/lib/utils`). No CSS files here, no `tailwind.config.*` — it is CSS-first and config-less.
@@ -169,8 +210,9 @@ Gate dev-only code with `import.meta.env.DEV` (`src/main.ts:122`).
 
 | File | Why it matters |
 | --- | --- |
-| `vite.config.ts` | The seam. Aliases, plus three perf workarounds that must not be "cleaned up": Tailwind `source(none)` pinning (scanning `src-tauri/target` stalls cold start ~25 s), single-React pinning, `server.warmup`. |
+| `vite.config.ts` | The seam. Aliases, plus three perf workarounds that must not be "cleaned up": Tailwind `source(none)` pinning (scanning `src-tauri/target` stalls cold start ~25 s), single-React pinning, `server.warmup`. Also the two build-time rewrites of pixiWeb's own files (`index.css` sources, `main.tsx`'s service worker). |
 | `tsconfig.app.json` | Mirrors the Vite aliases so drift fails `pnpm check`. Extends the sibling's config. |
+| `index.html` | The desktop head — pixiWeb's is not used. Applies the stored theme and accent before first paint, `no-referrer`, poster-CDN preconnects. |
 | `src/main.ts` | All platform glue: error reporting, protocol-base fetch, scheme probe, `await import('@/main')` to boot React. The React tree never imports Tauri. |
 | `src/bridge/client/fetch.ts` | 1:1 translation table between pixiWeb's HTTP paths and Tauri commands. The seam's most fragile contract. |
 | `src/shadow/config.ts` | Lazy `baseUrl` getter — lets `src/main.ts` set the base before the app is evaluated. |
@@ -195,8 +237,10 @@ Gate dev-only code with `import.meta.env.DEV` (`src/main.ts:122`).
   `VITE_PIXICLIENT_URL` / `_TOKEN` are **inert** on desktop (base and token are forced in
   `src/shadow/config.ts:34`). To override one, put the `.env` in `pixiDesktop/`, not `pixiWeb/`.
 - **CSP is shipped byte-exact on purpose.** `'unsafe-inline'` in script/style-src plus
-  `dangerousDisableAssetCspModification` keeps the extension sandbox working — do not let a tool
-  "fix" the CSP string.
+  `dangerousDisableAssetCspModification` keeps the extension sandbox working; `pixi:`/`http://pixi.localhost`
+  in `connect-src` is the HLS transport, and `https:`/`blob:` in `media-src` is progressive playback
+  (Chromium enforces `media-src`, WebKit does not — both must be listed for the fix to hold on
+  Windows). Do not let a tool "fix" the CSP string.
 
 ## Testing & QA
 
@@ -222,7 +266,9 @@ library, no `tempfile`, no `wiremock`. Tests live in `#[cfg(test)] mod tests` be
 
 ### Deliberate ceilings — do not "fix" unasked
 
-Recorded in `README.md:92-100`: HLS save is byte concatenation (`EXT-X-KEY` / `EXT-X-BYTERANGE` are
-refused by design); no download progress, cancel, or save-as; the protocol handler buffers bodies
-in RAM. Windows (`http://pixi.localhost/...`) and macOS (Gatekeeper/notarization) are **unverified**
-— not known-broken. Only Linux/CachyOS is confirmed working.
+Recorded in `README.md` → *Known limitations*: no Save affordance in the UI (the Rust service and
+its tests are intact but have no caller); HLS save is byte concatenation (`EXT-X-KEY` /
+`EXT-X-BYTERANGE` are refused by design); no download progress, cancel, or save-as; the protocol
+handler buffers bodies in RAM. Windows (`http://pixi.localhost/...`) and macOS
+(Gatekeeper/notarization) are **unverified** — not known-broken. Only Linux/CachyOS is confirmed
+working.
