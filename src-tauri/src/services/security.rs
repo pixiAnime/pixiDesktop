@@ -212,6 +212,30 @@ fn is_blocked_v4(v4: Ipv4Addr) -> bool {
 mod tests {
     use super::*;
 
+    /// The extension sandbox is a `srcdoc` iframe, so pixiWeb's own meta CSP
+    /// cannot loosen what this policy forbids: the frame inherits the app CSP
+    /// and evaluates the module with `import(blobUrl)`. Dev builds never apply
+    /// the CSP, so dropping `blob:` from `script-src` breaks every extension
+    /// install in production only — silent until someone runs the installer.
+    #[test]
+    fn csp_lets_the_extension_sandbox_import_its_blob_module() {
+        let csp = include_str!("../../tauri.conf.json")
+            .split("\"csp\": \"")
+            .nth(1)
+            .expect("no csp entry in tauri.conf.json")
+            .split('"')
+            .next()
+            .unwrap();
+        let script_src = csp
+            .split("; ")
+            .find(|d| d.starts_with("script-src"))
+            .expect("csp has no script-src directive");
+        assert!(
+            script_src.contains(" blob:"),
+            "script-src must allow blob: — the extension sandbox imports its module from a blob URL (got: {script_src})"
+        );
+    }
+
     #[test]
     fn rejects_bad_targets() {
         assert!(validate_url("").is_err());

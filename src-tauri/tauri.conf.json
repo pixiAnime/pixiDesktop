@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self' https: blob: ipc: http://ipc.localhost pixi: http://pixi.localhost; media-src 'self' blob: https: pixi: http://pixi.localhost; worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self' about:; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self' https: blob: ipc: http://ipc.localhost pixi: http://pixi.localhost; media-src 'self' blob: https: pixi: http://pixi.localhost; worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self' about:; object-src 'none'; base-uri 'self'; form-action 'self'",
       "dangerousDisableAssetCspModification": true
     }
   },

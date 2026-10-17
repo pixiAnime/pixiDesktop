@@ -119,7 +119,7 @@ Neither is reachable from the UI today — see *Communication channels*.
 | `src-tauri/src/` | Rust: `main.rs`, `protocol.rs`, `error.rs`, `commands/`, `services/` |
 | `src-tauri/src/services/` | `proxy.rs`, `security.rs`, `hls.rs`, `download.rs` — where tests live |
 | `src-tauri/gen/schemas/` | **Generated** by `tauri_build` — do not hand-edit |
-| `src-tauri/target/`, `dist/` | Build output. There is **no `.gitignore`** in this repo; don't commit these |
+| `src-tauri/target/`, `dist/` | Build output — both are in `.gitignore`; don't commit these |
 
 ## Development Commands
 
@@ -128,7 +128,7 @@ pnpm install                    # this repo
 pnpm tauri:dev                  # dev app (Vite :1420, Rust recompiles live) ← primary loop
 pnpm check                      # tsc --noEmit across BOTH trees ← the drift gate
 pnpm build                      # tsc --noEmit && vite build → ./dist
-cd src-tauri && cargo test      # 17 tests — HLS, security, proxy, downloads ← Rust loop
+cd src-tauri && cargo test      # 18 tests — HLS, security, proxy, downloads ← Rust loop
 cd src-tauri && cargo clippy --all-targets -- -D warnings   # the Rust gate CI enforces
 pnpm tauri:build                # release binary + installers
 git tag v0.2.0 && git push origin v0.2.0                   # → CI release, all 3 platforms
@@ -236,8 +236,12 @@ Gate dev-only code with `import.meta.env.DEV` (`src/main.ts:122`).
 - **Env vars:** no `.env` here. `VITE_*` values are inherited from pixiWeb's config module;
   `VITE_PIXICLIENT_URL` / `_TOKEN` are **inert** on desktop (base and token are forced in
   `src/shadow/config.ts:34`). To override one, put the `.env` in `pixiDesktop/`, not `pixiWeb/`.
-- **CSP is shipped byte-exact on purpose.** `'unsafe-inline'` in script/style-src plus
-  `dangerousDisableAssetCspModification` keeps the extension sandbox working; `pixi:`/`http://pixi.localhost`
+- **CSP is shipped byte-exact on purpose.** `blob:` in `script-src` is what the extension sandbox
+  needs: it lives in a `srcdoc` iframe that *inherits this policy*, and evaluates the extension
+  module with `import(blobUrl)` — the frame's own meta CSP cannot loosen the parent's. Dropping it
+  turns every install into "The extension module could not be evaluated" in production only (dev
+  has no CSP). `'unsafe-inline'` in script/style-src plus `dangerousDisableAssetCspModification`
+  cover the rest of the sandbox; `pixi:`/`http://pixi.localhost`
   in `connect-src` is the HLS transport, and `https:`/`blob:` in `media-src` is progressive playback
   (Chromium enforces `media-src`, WebKit does not — both must be listed for the fix to hold on
   Windows). Do not let a tool "fix" the CSP string.
@@ -252,7 +256,7 @@ library, no `tempfile`, no `wiremock`. Tests live in `#[cfg(test)] mod tests` be
 - `mod network_tests` — hits the live internet and `std::env::temp_dir()`; marked "Needs network"
   (`proxy.rs:129`, `download.rs:444`). These do pass in this environment.
 
-17 tests total (verified: `cargo test` → `17 passed`). Conventions:
+18 tests total (verified: `cargo test` → `18 passed`). Conventions:
 
 - Test fn names state the invariant: `never_overwrites_a_previous_save`,
   `header_rules_match_pixiweb`, `refuses_playlists_it_cannot_just_join`.
