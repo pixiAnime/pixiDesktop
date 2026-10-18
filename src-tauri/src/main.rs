@@ -39,7 +39,27 @@ fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
         .map_err(|err| err.to_string())
 }
 
+/// WebKitGTK's DMABUF renderer disagrees with the NVIDIA proprietary driver on
+/// Wayland: scrolling repaints flicker (sticky panels, blurred header) and
+/// video playback (GStreamer's dmabuf sink, decode on the Optimus iGPU and
+/// display on the NVIDIA dGPU) hangs the whole webview process. Tauri's
+/// documented workaround is the shared-memory fallback — see
+/// tauri-apps/tauri#9394 and tauri-apps/tauri#13498; upstream WebKit bug
+/// 260654 tracks the NVIDIA dmabuf path itself.
+///
+/// A value already in the environment always wins, so a user can still test
+/// the GPU path (`WEBKIT_DISABLE_DMABUF_RENDERER=0 …`) or escalate to the last
+/// resort (`WEBKIT_DISABLE_COMPOSITING_MODE=1`) without a rebuild.
+fn apply_webgpu_fallback() {
+    for var in ["WEBKIT_DISABLE_DMABUF_RENDERER", "__NV_DISABLE_EXPLICIT_SYNC"] {
+        if std::env::var_os(var).is_none() {
+            std::env::set_var(var, "1");
+        }
+    }
+}
+
 fn main() {
+    apply_webgpu_fallback();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![

@@ -88,6 +88,13 @@ pnpm tauri:dev
 | Rust | stable toolchain, edition 2021 |
 | Linux | `webkit2gtk-4.1`, `gtk+-3.0`, `libssl`, `libxdo` |
 
+On Linux the webview ships with a WebKitGPU fallback for NVIDIA/Wayland hosts:
+`main()` sets `WEBKIT_DISABLE_DMABUF_RENDERER` and `__NV_DISABLE_EXPLICIT_SYNC`
+unless already present in the environment — the DMABUF renderer otherwise
+flickers on scroll and freezes the webview in video playback on proprietary
+NVIDIA (tauri-apps/tauri#9394, WebKit bug 260654). Set either variable yourself
+to override.
+
 ## Development
 
 ```sh

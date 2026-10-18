@@ -25,6 +25,118 @@
     <link rel="dns-prefetch" href="https://api.jikan.moe" />
     <link rel="dns-prefetch" href="https://graphql.anilist.co" />
     <title>PixiAnime</title>
+    <style>
+      /*
+       * Linux webview paint budget. main.rs falls WebKitGTK back to the
+       * shared-memory renderer on NVIDIA hosts (scroll flicker + video
+       * freeze on the dmabuf path); every extra full-frame filter cost now
+       * lands on blits, and the sticky header re-renders its 24px backdrop
+       * blur on every scroll frame — that IS the "kasma" users feel. The
+       * translucent base colours stay (bg-background/85 on the header), so
+       * the shell keeps its look; only the per-frame re-blur is dropped.
+       */
+      @supports (backdrop-filter: blur(1px)) {
+        *,
+        *::before,
+        *::after {
+          backdrop-filter: none !important;
+        }
+      }
+      /*
+       * WebKitGTK can't cache background-attachment:fixed — every frame of
+       * the skeleton shimmer (background-position animation) repaints the
+       * whole page, which caps scroll fps exactly while cards are loading.
+       * Keep the shimmer, scroll it with the element instead.
+       */
+      [data-slot="skeleton"],
+      [data-slot="skeleton"] * {
+        background-attachment: local !important;
+      }
+      /*
+       * Sticky shells (header, left rail, Watch episode column only exist at
+       * the lg: breakpoint — that is why jank tracks window size, not width
+       * alone) are repositioned every scroll frame, and WebKitGTK repaints
+       * the content behind them to do it. Promote each shell into its own
+       * compositing layer: scroll then moves a layer instead of repainting
+       * the page.
+       */
+      [class~="sticky"],
+      [class~="lg:sticky"] {
+        will-change: transform;
+      }
+      /*
+       * Poster sections (Home rows, Browse rails, CTA bands — every wrapper
+       * that carries pixiWeb's data-reveal) keep rasterizing while off
+       * screen; on a large window that is more off-screen than on-screen
+       * work per scroll frame. content-visibility:auto skips their paint
+       * entirely until they scroll near; `auto 480px` makes the first
+       * estimate and every later re-estimate cheap (scrollbar stays calm).
+       */
+      [data-reveal] {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 480px;
+      }
+      /*
+       * The reveal animation is the scroll bottleneck itself: each section
+       * (full-width, hundreds of px tall, dozens of decoded posters inside)
+       * runs a 0.7s translate+opacity animation when it first scrolls into
+       * view, and fast scrolling starts several of them at once — software
+       * raster repaints those whole sections every frame for the duration.
+       * Reveal instantly instead: static content, cheap paint, identical end
+       * state. This is the biggest single-per-frame saving left in the tree.
+       */
+      [data-reveal] {
+        opacity: 1 !important;
+        translate: none !important;
+        transition: none !important;
+      }
+      /*
+       * While cards are loading the page keeps repainting per animation
+       * frame: the skeleton shimmer rescrolls its gradient and animate-pulse
+       * blocks re-fade entire poster-sized placeholders (the Watch player
+       * placeholder is full-bleed). Both are pure decoration under a
+       * software raster — freeze them at a solid resting paint.
+       */
+      [data-slot="skeleton"],
+      [class~="animate-skeleton"],
+      [class~="animate-pulse"] {
+        animation: none !important;
+      }
+      /*
+       * CTA band decor: a 4px-tiled radial "grain" over a full-width band
+       * plus a 288px circle standing in a 64px Gaussian (filter: blur), both
+       * repainted whenever their tiles invalidate during scroll. Neither
+       * carries information. Drop the blur filter, paint the plain block.
+       */
+      [class~="grain"] {
+        background: none !important;
+      }
+      [class~="blur-3xl"] {
+        filter: none !important;
+      }
+      /*
+       * Hover effects on poster cards re-lauch transitions while the cursor
+       * sweeps visible rows during scroll: each card crossed starts a 300ms
+       * transform/border-color/box-shadow transition (shadow-xl animates a
+       * blur = expensive soft-raster paint per frame) plus a 500ms scale
+       * resampling of the decoded poster. Killing the transition-property
+       * on those exact utility tokens keeps this a desktop-only trim —
+       * cards just stop animating on hover.
+       */
+      [class~="transition-[transform,border-color,box-shadow]"],
+      [class~="transition-transform"] {
+        transition-property: none !important;
+      }
+      /*
+       * The sticky header is translucent over scrolling content, so every
+       * scroll frame recomposites the whole header strip against whatever
+       * posters pass beneath. Make it opaque: one static layer, scroll then
+       * only moves it.
+       */
+      header {
+        background-color: var(--background) !important;
+      }
+    </style>
     <!--
       Apply the stored theme and brand hue before first paint — a light-mode or
       non-default-accent user never sees a flash. Mirrors pixiWeb's index.html

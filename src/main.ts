@@ -84,6 +84,7 @@ async function waitForMount(): Promise<number> {
 // scheduler tick, so this never happens synchronously.
 void (async () => {
   await report(`app mounted, root children: ${await waitForMount()}`)
+  await report(`devicePixelRatio: ${window.devicePixelRatio}`)
   // What actually rendered — a stuck splash vs. real chrome is invisible in a
   // child count, and this is the only view a headless run gets.
   const root = document.getElementById('root')
